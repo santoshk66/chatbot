@@ -1,41 +1,35 @@
-require('dotenv').config();
-const express = require('express');
-const { Configuration, OpenAIApi } = require('openai');
-const detectIntent = require('./intents');
-const responses = require('./responses.json');
+import express from "express";
+import "dotenv/config";
+import { OpenAI } from "openai";
 
 const app = express();
 app.use(express.json());
 
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+app.get("/", (req, res) => {
+  res.send("Maizic Chatbot API is running.");
 });
-const openai = new OpenAIApi(configuration);
 
-app.post('/chat', async (req, res) => {
+app.post("/chat", async (req, res) => {
   const userInput = req.body.message;
-  const intent = detectIntent(userInput);
-
-  if (intent && responses[intent]) {
-    return res.json({ reply: responses[intent] });
-  }
 
   try {
-    const completion = await openai.createChatCompletion({
+    const completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
-        { role: "system", content: "You are a helpful customer care agent for Maizic Smarthome. Provide polite, accurate, and helpful responses." },
+        { role: "system", content: "You are a helpful customer care agent for Maizic Smarthome." },
         { role: "user", content: userInput }
       ]
     });
 
-    const reply = completion.data.choices[0].message.content;
+    const reply = completion.choices[0].message.content;
     res.json({ reply });
-
-  } catch (error) {
-    console.error("Error from OpenAI:", error);
-    res.json({ reply: responses["notfound"] });
+  } catch (err) {
+    console.error("OpenAI API error:", err);
+    res.status(500).json({ reply: "Sorry, something went wrong." });
   }
 });
 
-app.listen(3000, () => console.log('Maizic chatbot running on http://localhost:3000'));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
