@@ -13,22 +13,47 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Validate OpenAI API key
-if (!process.env.OPENAI_API_KEY) {
-  console.error("OPENAI_API_KEY is not set in environment variables");
+// Validate environment variables
+const requiredEnvVars = ["OPENAI_API_KEY"];
+const missingEnvVars = requiredEnvVars.filter((varName) => !process.env[varName]);
+if (missingEnvVars.length > 0) {
+  console.error(`ERROR: Missing environment variables: ${missingEnvVars.join(", ")}`);
   process.exit(1);
 }
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// Debug endpoint to check server status
+app.get("/debug", (req, res) => {
+  console.log("Debug endpoint accessed", { clientIp: req.ip, headers: req.headers });
+  res.json({
+    status: "running",
+    timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+    environment: {
+      NODE_ENV: process.env.NODE_ENV || "development",
+      PORT: process.env.PORT || 3000,
+      OPENAI_API_KEY_SET: !!process.env.OPENAI_API_KEY
+    },
+    openai: {
+      apiKeyConfigured: !!openai.apiKey,
+      model: "gpt-3.5-turbo"
+    }
+  });
+});
+
 app.get("/", (req, res) => {
-  console.log("Health check accessed");
+  console.log("Health check accessed", { clientIp: req.ip });
   res.send("Maizic Chatbot API is running.");
 });
 
 app.post("/chat", async (req, res) => {
   const userInput = req.body.message;
-  console.log("Received chat request:", { message: userInput });
+  console.log("Received chat request:", {
+    message: userInput,
+    clientIp: req.ip,
+    headers: req.headers,
+    body: req.body
+  });
 
   // Validate input
   if (!userInput || typeof userInput !== "string" || userInput.trim() === "") {
@@ -37,41 +62,56 @@ app.post("/chat", async (req, res) => {
   }
 
   try {
+    console.log("Sending request to OpenAI API", { model: "gpt-3.5-turbo", message: userInput });
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // Fallback to gpt-3.5-turbo for reliability
+      model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: "You are a helpful customer care agent for Maizic Smarthome, providing concise and friendly responses about smart home products, warranties, and support." },
         { role: "user", content: userInput.trim() }
       ],
       max_tokens: 150,
-      temperature: 0.7 // Ensure consistent responses
+      temperature: 0.7
     });
 
     const reply = completion.choices[0].message.content.trim();
-    console.log("OpenAI response:", { reply });
+    console.log("OpenAI response:", { reply, usage: completion.usage });
     res.json({ reply });
   } catch (err) {
     console.error("OpenAI API error:", {
       message: err.message,
       status: err.response?.status,
-      data: err.response?.data
+      data: err.response?.data || "No additional data",
+      stack: err.stack
     });
     let errorMessage = "Sorry, something went wrong on our server.";
     if (err.response?.status === 401) {
-      errorMessage = "Authentication error with OpenAI API. Please contact support.";
+      errorMessage = "Authentication error: Invalid or missing OpenAI API key.";
     } else if (err.response?.status === 429) {
-      errorMessage = "We're experiencing high demand. Please try again later.";
+      errorMessage = "Rate limit exceeded. Please try again later.";
     } else if (err.response?.status === 400) {
-      errorMessage = "Invalid request to the AI service.";
+      errorMessage = "Invalid request to OpenAI. Please try a different message.";
     } else if (err.message.includes("network")) {
-      errorMessage = "Network issue contacting the AI service.";
+      errorMessage = "Network issue contacting OpenAI.";
+    } else if (err.message.includes("model")) {
+      errorMessage = "Requested AI model is unavailable.";
     }
-    res.status(500).json({ reply: errorMessage });
+    res.status(500).json({
+      reply: errorMessage,
+      errorDetails: {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data || "No additional data"
+      }
+    });
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log("Environment check:", { OPENAI_API_KEY: !!process.env.OPENAI_API_KEY });
+  console.log("Environment check:", {
+    NODE_ENV: process.env.NODE_ENV || "development",
+    OPENAI_API_KEY_SET: !!process.env.OPENAI_API_KEY,
+    PORT
+  });
 });
