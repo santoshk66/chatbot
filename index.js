@@ -1,8 +1,14 @@
 import express from "express";
+import cors from "cors";
 import "dotenv/config";
 import { OpenAI } from "openai";
 
 const app = express();
+app.use(cors({
+  origin: "https://www.maizic.com",
+  methods: ["POST"],
+  allowedHeaders: ["Content-Type"]
+}));
 app.use(express.json());
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
