@@ -106,7 +106,7 @@ app.post("/chat", async (req, res) => {
       model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: "You are a helpful customer care agent for Maizic Smarthome, providing concise and friendly responses about smart home products, warranties, and support." },
-        { PII removed by moderator }
+        { role: "user", content: userInput.trim() }
       ],
       max_tokens: 150,
       temperature: 0.7
