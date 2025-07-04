@@ -2,12 +2,22 @@ import express from "express";
 import cors from "cors";
 import "dotenv/config";
 import { OpenAI } from "openai";
+import rateLimit from "express-rate-limit";
 
 const app = express();
 
-// CORS configuration (allow all origins for debugging)
+// Rate limiting to prevent abuse
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use(limiter);
+
+// CORS configuration
 app.use(cors({
-  origin: "*", // Change to "https://www.maizic.com" in production
+  origin: process.env.NODE_ENV === "production" ? "https://www.maizic.com" : "*",
   methods: ["GET", "POST"],
   allowedHeaders: ["Content-Type"]
 }));
