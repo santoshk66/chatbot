@@ -6,10 +6,10 @@ import rateLimit from "express-rate-limit";
 
 const app = express();
 
-// Rate limiting to prevent abuse
+// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -33,9 +33,27 @@ if (missingEnvVars.length > 0) {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Debug endpoint to check server status
-app.get("/debug", (req, res) => {
+// Test OpenAI API key validity
+async function testOpenAIKey() {
+  try {
+    console.log("Testing OpenAI API key");
+    await openai.models.list(); // Simple API call to verify key
+    console.log("OpenAI API key is valid");
+    return true;
+  } catch (err) {
+    console.error("OpenAI API key validation failed:", {
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data || "No additional data"
+    });
+    return false;
+  }
+}
+
+// Debug endpoint
+app.get("/debug", async (req, res) => {
   console.log("Debug endpoint accessed", { clientIp: req.ip, headers: req.headers });
+  const isOpenAIKeyValid = await testOpenAIKey();
   res.json({
     status: "running",
     timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
@@ -46,6 +64,7 @@ app.get("/debug", (req, res) => {
     },
     openai: {
       apiKeyConfigured: !!openai.apiKey,
+      apiKeyValid: isOpenAIKeyValid,
       model: "gpt-3.5-turbo"
     }
   });
@@ -71,6 +90,16 @@ app.post("/chat", async (req, res) => {
     return res.status(400).json({ reply: "Please provide a valid message." });
   }
 
+  // Check OpenAI API key
+  const isOpenAIKeyValid = await testOpenAIKey();
+  if (!isOpenAIKeyValid) {
+    console.error("Invalid OpenAI API key");
+    return res.status(500).json({
+      reply: "Server configuration error: Invalid OpenAI API key.",
+      errorDetails: { message: "Invalid OpenAI API key" }
+    });
+  }
+
   try {
     console.log("Sending request to OpenAI API", { model: "gpt-3.5-turbo", message: userInput });
     const completion = await openai.chat.completions.create({
@@ -81,6 +110,21 @@ app.post("/chat", async (req, res) => {
       ],
       max_tokens: 150,
       temperature: 0.7
+    }).catch(async (err) => {
+      // Fallback to gpt-4o-mini if gpt-3.5-turbo fails
+      if (err.message.includes("model")) {
+        console.log("Falling back to gpt-4o-mini");
+        return await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: "You are a helpful customer care agent for Maizic Smarthome, providing concise and friendly responses about smart home products, warranties, and support." },
+            { role: "user", content: userInput.trim() }
+          ],
+          max_tokens: 150,
+          temperature: 0.7
+        });
+      }
+      throw err;
     });
 
     const reply = completion.choices[0].message.content.trim();
@@ -89,14 +133,14 @@ app.post("/chat", async (req, res) => {
   } catch (err) {
     console.error("OpenAI API error:", {
       message: err.message,
-      status: err.response?.status,
+      status: personally identifiable information (PII) removed by moderator,
       data: err.response?.data || "No additional data",
       stack: err.stack
     });
     let errorMessage = "Sorry, something went wrong on our server.";
     if (err.response?.status === 401) {
-      errorMessage = "Authentication error: Invalid or missing OpenAI API key.";
-    } else if (err.response?.status === 429) {
+      errorMessage = "Authentication error: Invalid OpenAI API key.";
+    } else if (err.response?.4 personally identifiable information (PII) removed by moderator) {
       errorMessage = "Rate limit exceeded. Please try again later.";
     } else if (err.response?.status === 400) {
       errorMessage = "Invalid request to OpenAI. Please try a different message.";
@@ -124,4 +168,6 @@ app.listen(PORT, () => {
     OPENAI_API_KEY_SET: !!process.env.OPENAI_API_KEY,
     PORT
   });
+  // Test OpenAI key on startup
+  testOpenAIKey();
 });
