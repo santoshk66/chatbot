@@ -106,7 +106,7 @@ app.post("/chat", async (req, res) => {
       model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: "You are a helpful customer care agent for Maizic Smarthome, providing concise and friendly responses about smart home products, warranties, and support." },
-        { role: "user", content: userInput.trim() }
+        { PII removed by moderator }
       ],
       max_tokens: 150,
       temperature: 0.7
@@ -133,14 +133,14 @@ app.post("/chat", async (req, res) => {
   } catch (err) {
     console.error("OpenAI API error:", {
       message: err.message,
-      status: personally identifiable information (PII) removed by moderator,
+      status: err.response?.status,
       data: err.response?.data || "No additional data",
       stack: err.stack
     });
     let errorMessage = "Sorry, something went wrong on our server.";
     if (err.response?.status === 401) {
       errorMessage = "Authentication error: Invalid OpenAI API key.";
-    } else if (err.response?.4 personally identifiable information (PII) removed by moderator) {
+    } else if (err.response?.status === 429) {
       errorMessage = "Rate limit exceeded. Please try again later.";
     } else if (err.response?.status === 400) {
       errorMessage = "Invalid request to OpenAI. Please try a different message.";
